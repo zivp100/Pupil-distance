@@ -68,6 +68,9 @@ if 'results' not in st.session_state:
 if 'output_image' not in st.session_state:
     st.session_state.output_image = None
 
+if 'last_processed_image' not in st.session_state:
+    st.session_state.last_processed_image = None
+
 
 def process_uploaded_image(image_data, source_name="uploaded_image"):
     """Process an uploaded image and return results."""
@@ -165,11 +168,16 @@ with tab1:
     camera_image = st.camera_input("Take a photo with your credit card under your nose")
     
     if camera_image is not None:
-        if st.button("🔬 Analyze Photo", key="analyze_camera"):
+        # Create a unique identifier for this image
+        image_id = f"camera_{camera_image.id}"
+        
+        # Auto-process if this is a new image
+        if st.session_state.last_processed_image != image_id:
             with st.spinner("Processing image..."):
                 results, output_image = process_uploaded_image(camera_image, "camera_capture")
                 st.session_state.results = results
                 st.session_state.output_image = output_image
+                st.session_state.last_processed_image = image_id
 
 with tab2:
     uploaded_file = st.file_uploader(
@@ -179,11 +187,16 @@ with tab2:
     )
     
     if uploaded_file is not None:
-        if st.button("🔬 Analyze Image", key="analyze_upload"):
+        # Create a unique identifier for this image
+        image_id = f"upload_{uploaded_file.name}_{uploaded_file.size}"
+        
+        # Auto-process if this is a new image
+        if st.session_state.last_processed_image != image_id:
             with st.spinner("Processing image..."):
                 results, output_image = process_uploaded_image(uploaded_file, uploaded_file.name.split('.')[0])
                 st.session_state.results = results
                 st.session_state.output_image = output_image
+                st.session_state.last_processed_image = image_id
 
 # Results section
 if st.session_state.results is not None and st.session_state.output_image is not None:
@@ -239,6 +252,7 @@ if st.session_state.results is not None and st.session_state.output_image is not
     if st.button("🔄 Clear Results"):
         st.session_state.results = None
         st.session_state.output_image = None
+        st.session_state.last_processed_image = None
         st.rerun()
 
 # Footer
