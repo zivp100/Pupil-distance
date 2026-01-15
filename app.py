@@ -73,8 +73,8 @@ def process_uploaded_image(image_data, source_name="uploaded_image"):
     """Process an uploaded image and return results."""
     # Create a temporary directory for processing
     with tempfile.TemporaryDirectory() as temp_dir:
-        # Save the uploaded image
-        temp_image_path = os.path.join(temp_dir, f"{source_name}.jpg")
+        # Save the uploaded image as PNG to avoid JPEG compression artifacts
+        temp_image_path = os.path.join(temp_dir, f"{source_name}.png")
         
         # Convert to numpy array if needed
         if isinstance(image_data, np.ndarray):
@@ -84,12 +84,36 @@ def process_uploaded_image(image_data, source_name="uploaded_image"):
         else:
             # Image from file upload
             image_pil = Image.open(image_data)
-            image_rgb = np.array(image_pil)
+            
+            # Handle EXIF orientation (important for phone photos)
+            try:
+                from PIL import ExifTags
+                for orientation in ExifTags.TAGS.keys():
+                    if ExifTags.TAGS[orientation] == 'Orientation':
+                        break
+                exif = image_pil._getexif()
+                if exif is not None:
+                    orientation_value = exif.get(orientation)
+                    if orientation_value == 3:
+                        image_pil = image_pil.rotate(180, expand=True)
+                    elif orientation_value == 6:
+                        image_pil = image_pil.rotate(270, expand=True)
+                    elif orientation_value == 8:
+                        image_pil = image_pil.rotate(90, expand=True)
+            except (AttributeError, KeyError, IndexError, TypeError):
+                # No EXIF data or orientation tag
+                pass
+            
+            # Convert to RGB if necessary
             if image_pil.mode == 'RGBA':
-                image_rgb = cv2.cvtColor(image_rgb, cv2.COLOR_RGBA2RGB)
+                image_pil = image_pil.convert('RGB')
+            elif image_pil.mode != 'RGB':
+                image_pil = image_pil.convert('RGB')
+            
+            image_rgb = np.array(image_pil)
             image_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
         
-        # Save for processing
+        # Save as PNG (lossless) for processing
         cv2.imwrite(temp_image_path, image_bgr)
         
         try:
@@ -203,6 +227,13 @@ if st.session_state.results is not None and st.session_state.output_image is not
             right_pupil = results['right_pupil']
             st.markdown(f"**Left Pupil:** ({left_pupil[0]:.1f}, {left_pupil[1]:.1f})")
             st.markdown(f"**Right Pupil:** ({right_pupil[0]:.1f}, {right_pupil[1]:.1f})")
+        
+        # Debug info for troubleshooting
+        st.markdown("---")
+        st.markdown("**Debug Info:**")
+        if st.session_state.output_image is not None:
+            h, w = st.session_state.output_image.shape[:2]
+            st.markdown(f"- Processed image size: {w} x {h} pixels")
     
     # Clear results button
     if st.button("🔄 Clear Results"):
